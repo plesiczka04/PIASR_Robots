@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'example_pos_traj = python_controllers.example_pos_traj:main',
             'example_vel_traj = python_controllers.example_vel_traj:main',
+            'jacobian_vel.py = python_controllers.jacobian_vel:main',
         ],
     },
 )
