@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'numpy', 'scipy'],
     zip_safe=True,
     maintainer='anton',
     maintainer_email='a.bredenbeck@tudelft.nl',
@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
             'example_pos_traj = python_controllers.example_pos_traj:main',
             'example_vel_traj = python_controllers.example_vel_traj:main',
-            'jacobian_vel.py = python_controllers.jacobian_vel:main',
+            'jacobian_vel = python_controllers.jacobian_vel:main',
+            'ik_move_to_pose = python_controllers.ik_move_to_pose:main',
         ],
     },
 )
