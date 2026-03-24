@@ -24,6 +24,8 @@ setup(
             'example_vel_traj = python_controllers.example_vel_traj:main',
             'jacobian_vel = python_controllers.jacobian_vel:main',
             'ik_move_to_pose = python_controllers.ik_move_to_pose:main',
+            'pick_place = python_controllers.pick_place:main',
+            'ik_pick = python_controllers.ik_pick:main',
         ],
     },
 )
