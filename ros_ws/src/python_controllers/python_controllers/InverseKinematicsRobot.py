@@ -223,16 +223,9 @@ def ik_position(
             tol=1e-3,
             options={'ftol': 1e-16, 'gtol': 1e-12, 'maxiter': 50_000},
         )
-        if result.fun < best_cost:
-            best_cost   = result.fun
-            best_angles = result.x
-
-    position_error: float = np.sqrt(best_cost)
-
-    if position_error > pos_tol:
-        return 'No Solution', position_error
-
-    return list(best_angles), position_error
+        if result.fun < 1e-3:
+                sol += [best_angles]
+    return sol
 
 # ---------------------------------------------------------------------------
 # Euler angle extraction from rotation matrix
