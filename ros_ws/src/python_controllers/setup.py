@@ -31,7 +31,7 @@ setup(
             'YourBrother = python_controllers.YourBrother:main',
             'YourSister = python_controllers.YourSister:main',
             'YourStepMom = python_controllers.YourStepMom:main',
-            'YourStepDad = python_controllers.YourStepDad:main'
+            'YourStepDad = python_controllers.YourStepDad:main',
         ],
     },
 )

@@ -213,7 +213,7 @@ def ik_position(
 
     best_angles: JointAngles | None = None
     best_cost:   float              = 1e10
-
+    sol = []
     for initial_guess in _initial_guesses:
         result: OptimizeResult = minimize(
             cost,
@@ -224,7 +224,7 @@ def ik_position(
             options={'ftol': 1e-16, 'gtol': 1e-12, 'maxiter': 50_000},
         )
         if result.fun < 1e-3:
-                sol += [best_angles]
+                sol += [result.x]
     return sol
 
 # ---------------------------------------------------------------------------
