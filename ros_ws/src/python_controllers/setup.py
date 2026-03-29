@@ -26,6 +26,11 @@ setup(
             'ik_move_to_pose = python_controllers.ik_move_to_pose:main',
             'pick_place = python_controllers.pick_place:main',
             'ik_pick = python_controllers.ik_pick:main',
+            'YourMom = python_controllers.YourMom:main',
+            'YourDad = python_controllers.YourDad:main',
+            'YourBrother = python_controllers.YourBrother:main',
+            'YourSister = python_controllers.YourSister:main',
+            'YourStepMom = python_controllers.YourStepMom:main',
         ],
     },
 )
