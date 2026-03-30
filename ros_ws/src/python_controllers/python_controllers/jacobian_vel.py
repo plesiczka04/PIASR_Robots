@@ -7,10 +7,12 @@ def Rx(theta):
     return np.array([[1,0,0],
                      [0,np.cos(theta),-np.sin(theta)],
                      [0,np.sin(theta), np.cos(theta)]])
+
 def Ry(theta):
     return np.array([[ np.cos(theta),0,np.sin(theta)],
                      [0,1,0],
                      [-np.sin(theta),0,np.cos(theta)]])
+
 def Rz(theta):
     return np.array([[np.cos(theta),-np.sin(theta),0],
                      [np.sin(theta), np.cos(theta),0],
@@ -31,107 +33,106 @@ def forward_kinematics(q):
     T_34 = homogeneous(Rz(q4) @ Rz(np.pi/2), np.array([0.0052,-0.1349,0]))
     T_45 = homogeneous(Rz(q5) @ Ry(-np.pi/2), np.array([-0.0601,0,0]))
     T_5E = homogeneous(np.eye(3), np.array([0,0,0.075]))
+
     T_01 = T_0b @ T_b1
     T_02 = T_01 @ T_12
     T_03 = T_02 @ T_23
     T_04 = T_03 @ T_34
     T_05 = T_04 @ T_45
     T_0E = T_05 @ T_5E
-    T_list = [T_01, T_02, T_03, T_04, T_05, T_0E]
+
+    T_list = [T_01, T_02, T_03, T_04, T_05]
     return T_0E, T_list
 
 def compute_jacobian(q):
     T_0E, T_list = forward_kinematics(q)
     p_E = T_0E[:3,3]
+
     Jv, Jw = [], []
-    T_frames = [np.eye(4)] + T_list[:-1]
+    T_frames = [np.eye(4)] + T_list
     for i in range(5):
         T = T_frames[i]
         z_i = T[:3,2]
         p_i = T[:3,3]
         Jv.append(np.cross(z_i, p_E - p_i))
         Jw.append(z_i)
+
     Jv = np.array(Jv).T
     Jw = np.array(Jw).T
-    return np.vstack((Jv,Jw))
+    return np.vstack((Jv,Jw)), T_0E
 
-def damped_pseudoinverse(J, lam=0.01):
-    return J.T @ np.linalg.inv(J @ J.T + lam**2 * np.eye(J.shape[0]))
-
-q_min = np.array([-1.9, -3.15, -1.59, -0.98, -np.pi])
-q_max = np.array([ 2.3,  0.8,  1.79,  2.6,  np.pi])
-def joint_limit_gradient(q):
-    q_mid = (q_max + q_min)/2
-    q_range = (q_max - q_min)/2
-    grad = (q - q_mid) / (q_range**2)
-    return -grad
-
-def velocity_control(q, x_dot, lam=0.01, k_null=0.2):
-    J = compute_jacobian(q)
-    J_pinv = damped_pseudoinverse(J, lam)
-    q_dot_task = J_pinv @ x_dot
-    I = np.eye(len(q))
-    N = I - J_pinv @ J
-    q_dot_sec = joint_limit_gradient(q)
-    q_dot = q_dot_task + k_null*(N @ q_dot_sec)
-    q_dot_max = np.array([1.5]*5)
-    q_dot = np.clip(q_dot, -q_dot_max, q_dot_max)
+def velocity_control(q, v_des, dof=3):
+    J, _ = compute_jacobian(q) 
+    if dof == 3:
+        J_task = J[0:3, :]  # linear
+        q_dot = J_task.T @ np.linalg.inv(J_task @ J_task.T) @ v_des
+    else:
+        J_task = J[0:6, :]  # linear + angular
+        q_dot = J_task.T @ np.linalg.inv(J_task @ J_task.T) @ v_des
     return q_dot
 
-class ExampleVelTraj(Node):
-    def __init__(self):
-        super().__init__('example_vel_traj_node')
+class VelTraj(Node):
+    def __init__(self, dof=3):
+        super().__init__('vel_traj_node')
 
-        # Home position
-        self.q_home = np.array([0, np.deg2rad(70), np.deg2rad(-40), np.deg2rad(-60), 0])
-        self.q = np.zeros(5)  # start from zero
+        # initial configuration
+        self.q = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+        self.dof = dof
+
         self._publisher = self.create_publisher(JointTrajectory, 'joint_cmds', 100)
-        self._timer = self.create_timer(0.01, self.timer_callback)
+        self.dt = 0.01
+        self._timer = self.create_timer(self.dt, self.timer_callback)
 
-        # Flags and timing
-        self._at_home = False
-        self._beginning = self.get_clock().now()
-        self._move_speed = 0.2  # rad/s
+        self.direction = 1.0
+        self.v_mag = 0.005
+        self.workspace_limit = 0.05
+        self.offset = np.array([0.0, 0.15, 0.2])
+        self.p_start = None
+
+    def desired_ee_velocity(self, p):
+        if self.p_start is None:
+            self.p_start = p + self.offset
+
+        p_rel = p - self.p_start
+        self.direction = -1.0
+        # if p_rel[0] > self.workspace_limit:
+        #     self.direction = -1.0
+        # elif p_rel[0] < -self.workspace_limit:
+        #     self.direction = 1.0
+
+        vz = self.direction * self.v_mag
+        vy = 0.0
+        vx = 0.0
+
+        if self.dof == 3:
+            return np.array([vx, vy, vz])
+        else:
+            # angular velocities if full 6 DoF control
+            wx, wy, wz = 0.0, 0.0, 0.0
+            return np.array([vx, vy, vz, wx, wy, wz])
 
     def timer_callback(self):
-        now = self.get_clock().now()
-        dt = 0.04  # timer period
-
         msg = JointTrajectory()
-        msg.header.stamp = now.to_msg()
+        msg.header.stamp = self.get_clock().now().to_msg()
         point = JointTrajectoryPoint()
 
-        if not self._at_home:
-            # Move to home smoothly
-            q_diff = self.q_home - self.q
-            step = np.clip(q_diff, -self._move_speed*dt, self._move_speed*dt)
-            self.q += step
-            if np.allclose(self.q, self.q_home, atol=1e-3):
-                self.q = self.q_home.copy()
-                self._at_home = True
-                self.get_logger().info("Reached home, starting small periodic motion")
-            point.positions = self.q.tolist()
-            point.velocities = (step/dt).tolist()
-        else:
-            # Small periodic motion around home
-            t = (now - self._beginning).nanoseconds * 1e-9
-            period = 10  # seconds
-            amp = 3     # rad
-            vel = amp * 2*np.pi/period * np.cos(2*np.pi/period*t)
-            q_dot = np.array([vel, -vel, vel/2, -vel/2, 0])
-            self.q += q_dot*dt
+        T_0E, _ = forward_kinematics(self.q)
+        p = T_0E[:3,3]
 
-            # Clamp to joint limits
-            self.q = np.clip(self.q, q_min, q_max)
-            point.positions = self.q.tolist()
-            point.velocities = q_dot.tolist()
+        v_des = self.desired_ee_velocity(p)
+        q_dot = velocity_control(self.q, v_des, dof=self.dof)
+        print(q_dot)
+        self.q += q_dot * self.dt
 
+        point.positions = self.q.tolist()
+        point.velocities = q_dot.tolist()
         msg.points = [point]
         self._publisher.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = ExampleVelTraj()
+    # choose dof=3 for linear only, dof=6 for full 6 DoF
+    node = VelTraj(dof=3)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
