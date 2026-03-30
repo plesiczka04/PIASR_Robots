@@ -120,16 +120,16 @@ T_GGC = Transformation(np.zeros(3),          np.array([ 0.0,     0.0,     0.075 
 # ---------------------------------------------------------------------------
 
 _JOINT_BOUNDS: list[tuple[float, float]] = [
-    (-2.0,         2.3        ),   # shoulder
-    (-np.pi,       np.pi / 2  ),   # lower arm
-    (-np.pi / 2,   np.pi / 2  ),   # upper arm
-    (-np.pi / 2,   2.6        ),   # wrist
-    (-np.pi,       np.pi      ),   # gripper rotation
+    (-2.16,   2.0   ),   # shoulder
+    (-1.935,  1.945 ),   # lower arm
+    (-1.586,  1.792 ),   # upper arm
+    (-1.764,  1.772 ),   # wrist
+    (-2.921,  2.931 ),   # gripper rotation
 ]
+
 def floor_penalty(
     angles: JointAngles,
     floor_z: float = 0.001,
-    weight:  float = 100.0,
 ) -> float:
     """
     Penalise configurations where any link origin or gripper-link sample dips
@@ -172,7 +172,7 @@ def floor_penalty(
         if z < floor_z:
             penalty += (floor_z - z) ** 2
 
-    return weight * penalty
+    return penalty
 
 # ---------------------------------------------------------------------------
 # Forward kinematics
@@ -267,7 +267,8 @@ def ik_pose(
     target_pos:       list[float] | NDArray[np.float64],
     desired_approach: list[float] | NDArray[np.float64] | None = None,
     w_pos:            float = 100.0,
-    w_rot:            float = 120.0,
+    w_rot:            float = 50.0,
+    w_floor :         float = 100.0,
     pos_tol:          float = 1e-3,
 ) -> IKSolution:
     """
@@ -295,7 +296,7 @@ def ik_pose(
             gripper_z_axis = T[:3, 2]
             rot_error = np.linalg.norm(gripper_z_axis - approach_vec) ** 2
 
-        return w_pos * pos_error + w_rot * rot_error + floor_penalty(angles)
+        return w_pos * pos_error + w_rot * rot_error + w_floor*floor_penalty(angles)
 
     best_angles: JointAngles | None = None
     best_cost:   float              = 1e10

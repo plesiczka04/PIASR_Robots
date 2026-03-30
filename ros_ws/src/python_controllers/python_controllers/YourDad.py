@@ -149,7 +149,7 @@ class RobotMover(Node):
 
         if segment_idx >= self._num_segments:
             self._send_single_point(self._joint_trajectory[-1])
-            self.get_logger().info("Trajectory complete.")
+            self.get_logger().info("Trajectory compl ete.")
             self._timer.cancel()
             return
 

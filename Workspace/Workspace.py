@@ -52,10 +52,10 @@ TWOGC = T_WOB @ T_BS @ T_SU @ T_UL @ T_LW @ T_WRG @ T_GGC
 #  Angle grids
 # ------------------------------------------------------------
 
-shoulder_angle  = np.linspace(-2.0,  2.3,  50)
-lower_arm_angle = np.linspace(-np.pi, np.pi/2,  50)
-upper_arm_angle = np.linspace(-np.pi/2,np.pi/2, 50)
-wrist_angle     = np.linspace(-np.pi/2, 2.60, 25)
+shoulder_angle  = np.linspace(-2.16,  2.0,  50)
+lower_arm_angle = np.linspace(-1.935, 1.945,  50)
+upper_arm_angle = np.linspace(-1.586,1.792, 50)
+wrist_angle     = np.linspace(-1.764,1.772, 25)
 
 # wrist_angle     = np.linspace(0,2*np.pi, 50)
 # shoulder_angle  = np.linspace(0,2*np.pi,  75)
