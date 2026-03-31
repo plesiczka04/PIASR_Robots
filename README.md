@@ -44,7 +44,7 @@ To run the competition.py file for example. The full list of files includes:
 | pick_place          | Pick place using IK           |
 | competition         | Run during competition for stacking cubes           |
 | ik_draw_shape       | Draws a figure eight using IK           |
-| ik_configurations   | Moves to each of 5 configurations           |
-| ik_mult_configs     | Move to the same configuration in multiple ways           |
+| ik_configurations   | Moves to each of the 5 required positions           |
+| ik_mult_configs     | Move to the same position in multiple configurations           |
 
 For the workspace code, go to the home directory of this fork and then into /Workspace. Simply run this code with a python IDE of choice
