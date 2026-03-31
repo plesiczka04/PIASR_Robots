@@ -72,11 +72,11 @@ def velocity_control(q, v_des, dof=3):
     return q_dot
 
 class VelTraj(Node):
-    def __init__(self, dof=3):
+    def __init__(self, dof=6):
         super().__init__('vel_traj_node')
 
         # initial configuration
-        self.q = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+        self.q = np.array([0.0, 0.5, -0.2, -0.2, 0.0])
         self.dof = dof
 
         self._publisher = self.create_publisher(JointTrajectory, 'joint_cmds', 100)
