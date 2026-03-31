@@ -41,7 +41,6 @@ To run the competition.py file for example. The full list of files includes:
 | File Name            | Description |
 |---------------------|------------|
 | jacobian_vel        | Velocity Control of end-effector        |
-| ik_move_to_pose     | IK move to a position     |
 | pick_place          | Pick place using IK           |
 | competition         | Run during competition for stacking cubes           |
 | ik_draw_shape       | Draws a figure eight using IK           |
