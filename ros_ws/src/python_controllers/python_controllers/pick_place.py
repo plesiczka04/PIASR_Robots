@@ -1,155 +1,149 @@
-import numpy as np
 import rclpy
 from rclpy.node import Node
+import numpy as np
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-import time
+from python_controllers.InverseKinematicsRobot import ik_pose, usefull
 
-# --- Rotation matrices ---
-def Rx(theta):
-    return np.array([[1,0,0],
-                     [0,np.cos(theta),-np.sin(theta)],
-                     [0,np.sin(theta), np.cos(theta)]])
-def Ry(theta):
-    return np.array([[ np.cos(theta),0,np.sin(theta)],
-                     [0,1,0],
-                     [-np.sin(theta),0,np.cos(theta)]])
-def Rz(theta):
-    return np.array([[np.cos(theta),-np.sin(theta),0],
-                     [np.sin(theta), np.cos(theta),0],
-                     [0,0,1]])
+WAYPOINT_CACHE = {}
 
-# --- Homogeneous transform ---
-def homogeneous(R, p):
-    T = np.eye(4)
-    T[:3,:3] = R
-    T[:3,3] = p
-    return T
+def solve_waypoint(pos, idx):
+    key = tuple(np.round(pos[:3], 4))  # position as cache key
+    
+    if key in WAYPOINT_CACHE:
+        return WAYPOINT_CACHE[key]
+    
+    res, err = ik_pose(pos[:3], pos[3])
+    
+    if not isinstance(res, str):
+        WAYPOINT_CACHE[key] = (res, err)
+        # Seed this solution back as a high-priority initial guess
+        usefull(np.array(res))
+    
+    return res, err
 
-# --- Forward kinematics ---
-def forward_kinematics(q):
-    q1,q2,q3,q4,q5 = q
-    T_0b = homogeneous(Rz(np.pi), np.array([0,0,0]))
-    T_b1 = homogeneous(Rz(q1), np.array([0,-0.0452,0.0165]))
-    T_12 = homogeneous(Rz(q2) @ Ry(-np.pi/2), np.array([0,-0.0306,0.1025]))
-    T_23 = homogeneous(Rz(q3), np.array([0.11257,-0.028,0]))
-    T_34 = homogeneous(Rz(q4) @ Rz(np.pi/2), np.array([0.0052,-0.1349,0]))
-    T_45 = homogeneous(Rz(q5) @ Ry(-np.pi/2), np.array([-0.0601,0,0]))
-    T_5E = homogeneous(np.eye(3), np.array([0,0,0.075]))
-    T_01 = T_0b @ T_b1
-    T_02 = T_01 @ T_12
-    T_03 = T_02 @ T_23
-    T_04 = T_03 @ T_34
-    T_05 = T_04 @ T_45
-    T_0E = T_05 @ T_5E
-    return T_0E
 
-class PickPlace(Node):
-    def __init__(self):
-        super().__init__('pick_place_single')
-
-        # Single joint+gripper target position
-        self._joint_sequence = [
-            np.array([0.46326219556000003,
-                    0.24390294402,
-                    -0.7133010627,
-                    -1.3222914323600001,
-                    0.20555342452,
-                    0.81914573652]),
-
-            np.array([0.44638840698,
-                    0.23930100168000001,
-                    -0.6810874663200001,
-                    -1.26400016272,
-                    0.19788352062,
-                    0.21110684904]),
-
-            np.array([0.11504855850000001,
-                    0.25924275182,
-                    -0.12118448162,
-                    -1.78862158948,
-                    0.18714565516,
-                    0.21110684904]),
-
-            np.array([-0.29452430976,
-                    0.28071848274,
-                    -0.28532042508,
-                    -1.64749535772,
-                    0.20401944374,
-                    0.21110684904]),
-
-            np.array([-0.27458255962,
-                    0.06596117354,
-                    -0.5215534652,
-                    -1.3529710479600001,
-                    0.20555342452,
-                    0.21110684904]),
-
-            np.array([-0.3144660599,
-                    0.058291269640000004,
-                    -0.52308744598,
-                    -1.36370891342,
-                    0.20248546296,
-                    0.9234564295600001]),
-
-            np.array([-0.3221359638,
-                    0.07209709666,
-                    -0.09510680836,
-                    -1.79015557026,
-                    0.1917475975,
-                    0.9234564295600001]),
-
-            np.array([0.0,
-                      0.0,
-                      0.0,
-                      0.0,
-                      0.0,
-                      0.0])
-        ]
-        self._step_index = 0
+class RobotMover(Node):
+    def __init__(self, waypoints, duration=1.0):
+        super().__init__('robot_mover')
         self._publisher = self.create_publisher(JointTrajectory, 'joint_cmds', 10)
-        self._timer = self.create_timer(0.04, self.timer_callback)  # 25 Hz
+        
+        # 1. Pre-calculate IK
+        self.q_list = []
+        for i, pos in enumerate(waypoints):
+            res, err = solve_waypoint(pos, i)  # uses cache on repeated positions
+            if isinstance(res, str):
+                self.get_logger().warn(f"Waypoint {i} unreachable. Skipping.")
+                continue
+            
+            joint_angles = list(res)
+            joint_angles[4] = 1.57
+            self.q_list.append(np.array(joint_angles + [float(pos[4])]))
+
+        if not self.q_list:
+            self.get_logger().error("No valid waypoints found!")
+            return
+
+        self.total_duration = float(duration)
+        self.num_segments = len(self.q_list) - 1
+        self.time_per_segment = self.total_duration / self.num_segments
+        
+        # --- MANUAL CONFIRMATION LOGIC ---
+        self.get_logger().info("Moving to START position...")
+        self.send_single_point(self.q_list[0])
+        
+        # This blocks the script until you interact with the terminal
+        print("\n" + "="*40)
+        user_input = input(" Robot at start. Press ENTER or 'y' to begin trajectory: ")
+        print("="*40 + "\n")
+
+        if user_input.lower() in ['', 'y', 'yes']:
+            self.begin_trajectory()
+        else:
+            self.get_logger().info("Trajectory cancelled by user.")
+            self.destroy_node()
+            rclpy.shutdown()
+
+    def send_single_point(self, q_values):
+        msg = JointTrajectory()
+        point = JointTrajectoryPoint()
+        point.positions = q_values.tolist()
+        msg.points = [point]
+        self._publisher.publish(msg)
+
+    def begin_trajectory(self):
+        # We start the timer immediately now because the user confirmed
+        self.start_time = self.get_clock().now()
+        self.timer = self.create_timer(0.04, self.timer_callback)
+        self.get_logger().info("Executing trajectory...")
 
     def timer_callback(self):
         now = self.get_clock().now()
+        elapsed = (now - self.start_time).nanoseconds / 1e9
+        segment_idx = int(elapsed // self.time_per_segment)
 
-        # Initialize timing on first run
-        if not hasattr(self, "_last_switch_time"):
-            self._last_switch_time = now
-
-        if self._step_index < len(self._joint_sequence):
-            q_full = self._joint_sequence[self._step_index]
-
-            # Split robot + gripper
-            q_robot = q_full[:5]
-            gripper = q_full[5]
-
-            # Publish command
-            msg = JointTrajectory()
-            msg.header.stamp = now.to_msg()
-            point = JointTrajectoryPoint()
-            point.positions = q_robot.tolist() + [gripper]
-            point.velocities = [0.0]*6
-            msg.points = [point]
-            self._publisher.publish(msg)
-
-            # Debug print (only when switching)
-            elapsed = (now - self._last_switch_time).nanoseconds * 1e-9
-
-            if elapsed > 8:  # wait 1 second per waypoint
-                self.get_logger().info(f"Moving to step {self._step_index+1}")
-                self._step_index += 1
-                self._last_switch_time = now
+        if segment_idx >= self.num_segments:
+            self.send_single_point(self.q_list[-1])
+            self.get_logger().info("Trajectory complete.")
+            self.timer.cancel()
         else:
-            self.get_logger().info("All commands executed.")
+            q_start = self.q_list[segment_idx]
+            q_end = self.q_list[segment_idx + 1]
+            t_raw = (elapsed % self.time_per_segment) / self.time_per_segment
+            
+            # 70% move, 30% wait logic
+            if t_raw < 0.7:
+                t_interp = t_raw / 0.7
+                current_q = q_start + (q_end - q_start) * t_interp
+            else:
+                current_q = q_end
 
+            self.send_single_point(current_q)
+
+def Approach (Point,zlim = 0.03,points = 3):
+    path = []
+    for i in np.linspace(Point[2],zlim,points):
+        if i > 0.10:
+            path += [[Point[0],Point[1],i] + [None,Point[4]]]
+        else:
+            path += [[Point[0],Point[1],i] + [Point[3],Point[4]]]
+    return path
+    
 def main(args=None):
     rclpy.init(args=args)
-    node = PickPlace()
-    rclpy.spin(node)
-    node.destroy_node()
+    DOWN = [0,0,-1]
+
+    path = []
+    i = 0
+    zlim = 0.02
+    height = 0.05
+
+    gripper_open = 0.6
+    gripper_closed = 0.03
+
+    x_left = -0.05
+    y_left = 0.16
+
+    x_right = 0.05
+    y_right = 0.16
+
+    # Move to left and grab
+    path += [[0, 0.2, 0.2, None, gripper_open]]
+    path += Approach([x_left, y_left, 0.03+zlim,  DOWN , gripper_open],zlim = 0.05,points=2) # Approach
+    path += [[x_left, y_left, 0.03+zlim, DOWN, gripper_closed]]
+    path += [[x_left, y_left, 0.1, DOWN, gripper_closed]]
+
+    path += [[x_right, y_right, 0.1+zlim, None, gripper_closed]]
+    path += [[x_right, y_right, 0.03+zlim, DOWN, gripper_closed]]
+    path += [[x_right, y_right, 0.03+zlim, DOWN, gripper_open]]
+    path += [[x_right, y_right, 0.1, None, gripper_open]]
+    path += [[0, 0.2, 0.2, None, gripper_open]]
+
+    mover = RobotMover(waypoints=path, duration=20.0)
+    if rclpy.ok():
+        rclpy.spin(mover)
+
+    mover.destroy_node()
     rclpy.shutdown()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
-
-# Close 0.21110684904
