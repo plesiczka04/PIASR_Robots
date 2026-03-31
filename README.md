@@ -7,7 +7,7 @@ Most of the code runs on ROS2, with the exception of the Workspace directory vis
 To run the code, go to the workspace and build the ros packages with the following terminal commands:
 
         git submodule update --recursive
-        
+
         source /opt/ros/{ROS_DISTRO}/setup.bash
 
         colcon build
