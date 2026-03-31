@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from python_controllers.InverseKinematicsRobot import ik_position, ik_pose, ForwardKinematics,Usefull
+from python_controllers.InverseKinematicsRobot import ik_pose, usefull
 
 WAYPOINT_CACHE = {}
 
@@ -17,7 +17,7 @@ def solve_waypoint(pos, idx):
     if not isinstance(res, str):
         WAYPOINT_CACHE[key] = (res, err)
         # Seed this solution back as a high-priority initial guess
-        Usefull(np.array(res))
+        usefull(np.array(res))
     
     return res, err
 
@@ -37,7 +37,6 @@ class RobotMover(Node):
             
             joint_angles = list(res)
             joint_angles[4] = 1.57
-            #print(ForwardKinematics(res)[:3, 2])
             self.q_list.append(np.array(joint_angles + [float(pos[4])]))
 
         if not self.q_list:
@@ -115,15 +114,31 @@ def main(args=None):
 
     path = []
     i = 0
-    zlim = 0.035
+    zlim = 0.02
+    height = 0.05
 
     gripper_open = 0.6
-    gripper_closed = 0
+    gripper_closed = 0.03
 
-    path += [[-0.2, 0.2, 0.3, None, gripper_open]] # Approach
-    path += [[-0.2, 0.2, 0.3, None, gripper_closed]] # Grasp
+    x_left = -0.05
+    y_left = 0.16
 
-    mover = RobotMover(waypoints=path, duration=10.0)
+    x_right = 0.05
+    y_right = 0.16
+
+    # Move to left and grab
+    path += [[0, 0.2, 0.2, None, gripper_open]]
+    path += Approach([x_left, y_left, 0.03+zlim,  DOWN , gripper_open],zlim = 0.05,points=2) # Approach
+    path += [[x_left, y_left, 0.03+zlim, DOWN, gripper_closed]]
+    path += [[x_left, y_left, 0.1, DOWN, gripper_closed]]
+
+    path += [[x_right, y_right, 0.1+zlim, None, gripper_closed]]
+    path += [[x_right, y_right, 0.03+zlim, DOWN, gripper_closed]]
+    path += [[x_right, y_right, 0.03+zlim, DOWN, gripper_open]]
+    path += [[x_right, y_right, 0.1, None, gripper_open]]
+    path += [[0, 0.2, 0.2, None, gripper_open]]
+
+    mover = RobotMover(waypoints=path, duration=20.0)
     if rclpy.ok():
         rclpy.spin(mover)
 
