@@ -38,11 +38,12 @@ Add a space to the end of the command and press tab to see a list of files. The 
 
 To run the competition.py file for example. The full list of files includes:
 
-jacobian_vel
-ik_move_to_pose
-pick_place
-ik_pick
-competition
-ik_draw_shape
-ik_configurations
-ik_mult_configs
+| File Name            | Description |
+|---------------------|------------|
+| jacobian_vel        | Velocity Control of end-effector        |
+| ik_move_to_pose     | IK move to a position     |
+| pick_place          | Pick place using IK           |
+| competition         | Run during competition for stacking cubes           |
+| ik_draw_shape       | Draws a figure eight using IK           |
+| ik_configurations   | Moves to each of 5 configurations           |
+| ik_mult_configs     | Move to the same configuration in multiple ways           |
