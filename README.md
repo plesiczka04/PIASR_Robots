@@ -48,3 +48,5 @@ To run the competition.py file for example. The full list of files includes:
 | ik_mult_configs     | Move to the same position in multiple configurations           |
 
 For the workspace code, go to the home directory of this fork and then into /Workspace. Simply run this code with a python IDE of choice
+
+In addition, python_controllers also contains the file InverseKinematicsRobot.py which each of the IK files takes the IK solutions from. (Note that it uses camelcase to indicate it is a helper file)
