@@ -36,4 +36,13 @@ Add a space to the end of the command and press tab to see a list of files. The 
 
         ros2 run python_controllers competition
 
-To run the competition.py file for example.
+To run the competition.py file for example. The full list of files includes:
+
+jacobian_vel
+ik_move_to_pose
+pick_place
+ik_pick
+competition
+ik_draw_shape
+ik_configurations
+ik_mult_configs
