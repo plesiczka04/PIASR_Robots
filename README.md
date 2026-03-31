@@ -32,4 +32,8 @@ As all our code is contained in the python controllers package type:
 
         ros2 run python_controllers 
 
-Add a space to the end of the command and press tab to see a list of files. The file names give a rough description of what they do.
+Add a space to the end of the command and press tab to see a list of files. The file names give a rough description of what they do. Then use
+
+        ros2 run python_controllers competition
+
+To run the competition.py file for example.
