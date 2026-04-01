@@ -3,29 +3,55 @@ from rclpy.node import Node
 import numpy as np
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-def Rx(theta):
+# ---------------------------------------------------------------------------
+# Rotation matrices
+# ---------------------------------------------------------------------------
+
+def Rx(theta: float) -> np.ndarray:
+    """Rotation about X axis by theta radians."""
     return np.array([[1,0,0],
                      [0,np.cos(theta),-np.sin(theta)],
                      [0,np.sin(theta), np.cos(theta)]])
 
-def Ry(theta):
+def Ry(theta: float) -> np.ndarray:
+    """Rotation about Y axis by theta radians."""
     return np.array([[ np.cos(theta),0,np.sin(theta)],
                      [0,1,0],
                      [-np.sin(theta),0,np.cos(theta)]])
 
-def Rz(theta):
+def Rz(theta: float) -> np.ndarray:
+    """Rotation about Z axis by theta radians."""
     return np.array([[np.cos(theta),-np.sin(theta),0],
                      [np.sin(theta), np.cos(theta),0],
                      [0,0,1]])
 
-def homogeneous(R, p):
+# ---------------------------------------------------------------------------
+# Homogeneous transformation
+# ---------------------------------------------------------------------------
+
+def homogeneous(R: np.ndarray, p: np.ndarray) -> np.ndarray:
+    """
+    Build a 4×4 homogeneous transformation matrix from rotation R and position p.
+    """
     T = np.eye(4)
     T[:3,:3] = R
     T[:3,3] = p
     return T
 
-def forward_kinematics(q):
+# ---------------------------------------------------------------------------
+# Forward kinematics
+# ---------------------------------------------------------------------------
+
+def forward_kinematics(q: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
+    """
+    Compute the end-effector pose and intermediate link transforms from joint angles.
+
+    Returns:
+        T_0E: 4x4 end-effector homogeneous transform
+        T_list: list of 4x4 transforms for each intermediate link
+    """
     q1,q2,q3,q4,q5 = q
+
     T_0b = homogeneous(Rz(np.pi), np.array([0,0,0]))
     T_b1 = homogeneous(Rz(q1), np.array([0,-0.0452,0.0165]))
     T_12 = homogeneous(Rz(q2) @ Ry(-np.pi/2), np.array([0,-0.0306,0.1025]))
@@ -44,7 +70,18 @@ def forward_kinematics(q):
     T_list = [T_01, T_02, T_03, T_04, T_05]
     return T_0E, T_list
 
-def compute_jacobian(q):
+# ---------------------------------------------------------------------------
+# Jacobian computation
+# ---------------------------------------------------------------------------
+
+def compute_jacobian(q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compute the 6x5 Jacobian matrix for the manipulator.
+
+    Returns:
+        J: 6x5 Jacobian (top: linear, bottom: angular)
+        T_0E: end-effector transform
+    """
     T_0E, T_list = forward_kinematics(q)
     p_E = T_0E[:3,3]
 
@@ -61,7 +98,22 @@ def compute_jacobian(q):
     Jw = np.array(Jw).T
     return np.vstack((Jv,Jw)), T_0E
 
-def velocity_control(q, v_des, dof=3):
+# ---------------------------------------------------------------------------
+# Velocity control
+# ---------------------------------------------------------------------------
+
+def velocity_control(q: np.ndarray, v_des: np.ndarray, dof: int = 3) -> np.ndarray:
+    """
+    Compute joint velocities for a desired end-effector velocity using Jacobian.
+    
+    Args:
+        q: current joint angles
+        v_des: desired end-effector velocity (3D or 6D)
+        dof: 3 for linear only, 6 for full DoF
+    
+    Returns:
+        q_dot: computed joint velocities
+    """
     J, _ = compute_jacobian(q) 
     if dof == 3:
         J_task = J[0:3, :]  # linear
@@ -71,11 +123,17 @@ def velocity_control(q, v_des, dof=3):
         q_dot = J_task.T @ np.linalg.inv(J_task @ J_task.T) @ v_des
     return q_dot
 
+# ---------------------------------------------------------------------------
+# ROS2 Node for velocity trajectory control
+# ---------------------------------------------------------------------------
+
 class VelTraj(Node):
-    def __init__(self, dof=6):
+    """
+    ROS2 node that publishes joint commands to follow a desired end-effector velocity.
+    """
+    def __init__(self, dof: int = 6):
         super().__init__('vel_traj_node')
 
-        # initial configuration
         self.q = np.array([0.0, 0.5, -0.2, -0.2, 0.0])
         self.dof = dof
 
@@ -89,12 +147,16 @@ class VelTraj(Node):
         self.offset = np.array([0.0, 0.15, 0.2])
         self.p_start = None
 
-    def desired_ee_velocity(self, p):
+    def desired_ee_velocity(self, p: np.ndarray) -> np.ndarray:
+        """
+        Compute a simple desired end-effector velocity along Z axis.
+        """
         if self.p_start is None:
             self.p_start = p + self.offset
 
         p_rel = p - self.p_start
         self.direction = -1.0
+        # Example for switching direction if workspace limits exceeded
         # if p_rel[0] > self.workspace_limit:
         #     self.direction = -1.0
         # elif p_rel[0] < -self.workspace_limit:
@@ -107,11 +169,13 @@ class VelTraj(Node):
         if self.dof == 3:
             return np.array([vx, vy, vz])
         else:
-            # angular velocities if full 6 DoF control
             wx, wy, wz = 0.0, 0.0, 0.0
             return np.array([vx, vy, vz, wx, wy, wz])
 
     def timer_callback(self):
+        """
+        Timer callback to compute joint velocities, update joint angles, and publish commands.
+        """
         msg = JointTrajectory()
         msg.header.stamp = self.get_clock().now().to_msg()
         point = JointTrajectoryPoint()
@@ -129,10 +193,13 @@ class VelTraj(Node):
         msg.points = [point]
         self._publisher.publish(msg)
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main(args=None):
     rclpy.init(args=args)
-    # choose dof=3 for linear only, dof=6 for full 6 DoF
-    node = VelTraj(dof=3)
+    node = VelTraj(dof=3)  # linear only (3 DoF)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
