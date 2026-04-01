@@ -1,8 +1,24 @@
 import rclpy
 from rclpy.node import Node
+
 import numpy as np
+from numpy.typing import NDArray
+
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from python_controllers.InverseKinematicsRobot import ik_pose
+
+# ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+
+# A waypoint is [x, y, z, orientation_or_None, gripper_value]
+Waypoint = list[float | None]
+
+# IK result is either a numpy array of joint angles, or a string error message
+IKResult = NDArray[np.float64] | str
+
+# Cache: maps (x, y, z) rounded position → (joint_angles, error)
+_waypoint_cache: dict[tuple[float, ...], tuple[NDArray[np.float64], float]] = {}
 
 class RobotMover(Node):
     def __init__(self, waypoints, duration=1.0):
