@@ -9,7 +9,7 @@ plt.rcParams.update({
     "axes.labelsize": 12,
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
-    "figure.dpi": 300        # High-res for clear printing
+    "figure.dpi": 300})        # High-res for clear printing
 
 # ------------------------------------------------------------
 #  Rotation + Transformation
