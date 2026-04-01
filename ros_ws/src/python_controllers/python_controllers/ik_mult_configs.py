@@ -12,7 +12,7 @@ class RobotMover(Node):
         # 1. Pre-calculate IK
         self.q_list = []
         for i, pos in enumerate(waypoints):
-            res, err = ik_pose(pos[:3],pos[3])  # uses cache on repeated positions
+            res, err = ik_pose(pos[:3],pos[3])
             if isinstance(res, str):
                 self.get_logger().warn(f"Waypoint {i} unreachable. Skipping.")
                 continue
@@ -35,10 +35,10 @@ class RobotMover(Node):
         
         # This blocks the script until you interact with the terminal
         print("\n" + "="*40)
-        user_input = input(" Robot at start. Press ENTER or 'y' to begin trajectory: ")
+        user_input = input(" Robot at start. Press ENTER to begin trajectory: ")
         print("="*40 + "\n")
 
-        if user_input.lower() in ['', 'y', 'yes']:
+        if user_input.lower() in ['']:
             self.begin_trajectory()
         else:
             self.get_logger().info("Trajectory cancelled by user.")

@@ -1,141 +1,100 @@
 import numpy as np
-import pyvista as pv
-np.set_printoptions(precision=4, suppress=True)
+import matplotlib.pyplot as plt
+from matplotlib.patches import Wedge
+
+# --- LATEX READABILITY SETTINGS ---
+plt.rcParams.update({
+    "font.size": 12,           # Matches standard LaTeX 12pt font
+    "axes.titlesize": 14,      # Slightly larger for headers
+    "axes.labelsize": 12,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "figure.dpi": 300        # High-res for clear printing
 
 # ------------------------------------------------------------
 #  Rotation + Transformation
 # ------------------------------------------------------------
-
 def Rotation(angle, axis: int):
     c, s = np.cos(angle), np.sin(angle)
-    if axis == 0:
-        return np.array([[1, 0, 0],
-                         [0, c,-s],
-                         [0, s, c]])
-    if axis == 1:
-        return np.array([[ c, 0, s],
-                         [ 0, 1, 0],
-                         [-s, 0, c]])
-    if axis == 2:
-        return np.array([[c,-s, 0],
-                         [s, c, 0],
-                         [0, 0, 1]])
+    if axis == 0: return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+    if axis == 1: return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    if axis == 2: return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
     raise ValueError("axis must be 0, 1, or 2")
 
 def Transformation(angle_vector: np.array, translation_vector: np.array = np.zeros(3)):
     R = np.eye(4)
     R[0:3, 3] = translation_vector
-    R[0:3, 0:3] = ( Rotation(angle_vector[2], 2)
-        @ Rotation(angle_vector[1], 1) @ Rotation(angle_vector[0], 0)
-    )
+    R[0:3, 0:3] = (Rotation(angle_vector[2], 2) @ 
+                   Rotation(angle_vector[1], 1) @ 
+                   Rotation(angle_vector[0], 0))
     return R
 
 # ------------------------------------------------------------
-#  Fixed transforms
+#  Setup 3-Deep Calculation
 # ------------------------------------------------------------
+T_SU = Transformation(np.array([0, -np.pi / 2, 0]), np.array([0, -0.0306, 0.1025]))
+T_UL = Transformation(np.zeros(3), np.array([0.11257, -0.028, 0]))
+T_LW = Transformation(np.array([0, 0, np.pi / 2]), np.array([0.0052, -0.1349, 0]))
+T_WRG = Transformation(np.array([0, -np.pi / 2, 0]), np.array([-0.0601, 0, 0]))
+T_GGC = Transformation(np.zeros(3), np.array([0, 0, 0.075]))
+P_WR = (T_WRG @ T_GGC) @ np.array([0, 0, 0, 1])
 
-T_WOB = Transformation(np.array([0,0,np.pi]))
-T_BS  = Transformation(np.zeros(3), np.array([0,-0.0452,0.0165]))
-T_SU  = Transformation(np.array([0,-np.pi/2,0]), np.array([0,-0.0306,0.1025]))
-T_UL  = Transformation(np.zeros(3), np.array([0.11257,-0.028,0]))
-T_LW  = Transformation(np.array([0,0,np.pi/2]), np.array([0.0052,-0.1349,0]))
-T_WRG = Transformation(np.array([0,-np.pi/2,0]), np.array([-0.0601,0,0]))
-T_GGC = Transformation(np.zeros(3), np.array([0,0,0.075]))
+#  Joint Angles 
+# shoulder_angle = np.linspace(-2.16, 2.0, 50)
+# lower_angle = np.linspace(-1.935, 1.945, 50)
+# upper_angle = np.linspace(-1.586, 1.792, 50)
+# wrist_angle = np.linspace(-1.764, 1.772, 25)
 
-T_WRGC = T_WRG @ T_GGC
-T_LWGC = T_LW @ T_WRGC
-P_GC = np.array([0,0,0,1])
-P_WR = T_WRGC @ P_GC
-TWOGC = T_WOB @ T_BS @ T_SU @ T_UL @ T_LW @ T_WRG @ T_GGC
+wrist_angle     = np.linspace(0,2*np.pi, 50)
+shoulder_angle  = np.linspace(0,2*np.pi,  75)
+upper_angle = np.linspace(0,2*np.pi, 50)
+lower_angle = np.linspace(0,2*np.pi,  50)
 
-# ------------------------------------------------------------
-#  Angle grids
-# ------------------------------------------------------------
+Tj = np.stack([Transformation(np.array([0, 0, a])) for a in lower_angle]).astype(np.float32)
+Tk = np.stack([Transformation(np.array([0, 0, a])) for a in upper_angle]).astype(np.float32)
+Tl = np.stack([Transformation(np.array([0, 0, a])) for a in wrist_angle]).astype(np.float32)
 
-shoulder_angle  = np.linspace(-2.16,  2.0,  50)
-lower_arm_angle = np.linspace(-1.935, 1.945,  50)
-upper_arm_angle = np.linspace(-1.586,1.792, 50)
-wrist_angle     = np.linspace(-1.764,1.772, 25)
+# Tensor Broadcasting (The "Three Deep")
+P_l = Tl @ P_WR
+P_k = Tk[:, None, :, :] @ T_LW @ P_l[None, :, :, None]
+P_j = Tj[:, None, None, :, :] @ T_UL @ P_k
 
-# wrist_angle     = np.linspace(0,2*np.pi, 50)
-# shoulder_angle  = np.linspace(0,2*np.pi,  75)
-# upper_arm_angle = np.linspace(0,2*np.pi, 50)
-# lower_arm_angle = np.linspace(0,2*np.pi,  50)
-
-Ti = np.stack([Transformation(np.array([0,0,a])) for a in shoulder_angle]).astype(np.float32)
-Tj = np.stack([Transformation(np.array([0,0,a])) for a in lower_arm_angle]).astype(np.float32)
-Tk = np.stack([Transformation(np.array([0,0,a])) for a in upper_arm_angle]).astype(np.float32)
-Tl = np.stack([Transformation(np.array([0,0,a])) for a in wrist_angle]).astype(np.float32)
-
-# ------------------------------------------------------------
-#  1-deep: l @ P_WR
-# ------------------------------------------------------------
-P_l    = Tl @ P_WR          # (15, 4)
-Points1 = P_l.T             # (4, 15)
-
-cloud1 = pv.PolyData(Points1[:3].T)
-pl1 = pv.Plotter()
-pl1.add_points(cloud1, color='blue', point_size=6, render_points_as_spheres=True)
-pl1.add_axes()
-pl1.show_grid()
-pl1.show(title="1-deep: wrist sweep")
-
-# ------------------------------------------------------------
-#  2-deep: k @ T_LW @ (l @ P_WR)
-# ------------------------------------------------------------
-P_l_exp  = P_l[None, :, :]            # (1, 15, 4)
-Tk_exp   = Tk[:, None, :, :]          # (15, 1, 4, 4)
-P_k      = Tk_exp @ T_LW @ P_l_exp[..., None]   # (15, 15, 4, 1)
-Points2  = P_k.squeeze().reshape(-1, 4).T        # (4, N)
-
-cloud2 = pv.PolyData(Points2[:3].T)
-pl2 = pv.Plotter()
-pl2.add_points(cloud2, color='blue', point_size=4, render_points_as_spheres=True)
-pl2.add_axes()
-pl2.show_grid()
-pl2.show(title="2-deep: wrist + upper-arm sweep")
-
-# ------------------------------------------------------------
-#  3-deep: j @ T_UL @ (k @ T_LW @ (l @ P_WR))
-# ------------------------------------------------------------
-Tj_exp = Tj[:, None, None, :, :]      # (20, 1, 1, 4, 4)
-P_j    = Tj_exp @ T_UL @ P_k          # (20, 15, 15, 4, 1)
+# Extract raw points in shoulder frame
 Points3 = P_j.squeeze().reshape(-1, 4).T
-
-cloud3 = pv.PolyData(Points3[:3].T)
-pl3 = pv.Plotter()
-pl3.add_points(cloud3, color='blue', point_size=2, render_points_as_spheres=True)
-pl3.add_axes()
-pl3.show_grid()
-pl3.show(title="3-deep: wrist + upper + lower-arm sweep")
+P_side = T_SU @ Points3
 
 # ------------------------------------------------------------
-#  4-deep: i @ T_SU @ (j @ T_UL @ (k @ T_LW @ (l @ P_WR)))
+#  HIGH-CONTRAST PLOT
 # ------------------------------------------------------------
-Ti_exp  = Ti[:, None, None, None, :, :]   # (20, 1, 1, 1, 4, 4)
-P_i     = Ti_exp @ T_SU @ P_j             # (20, 20, 15, 15, 4, 1)
-Points4 = P_i.squeeze().reshape(-1, 4).T  # (4, N)
+plt.style.use("dark_background")
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-# Final world transform
-Points4 = (T_WOB @ T_BS) @ Points4
+# --- Left: Side Profile (Raw Cloud) ---
+ax1.scatter(P_side[1], P_side[2], s=0.3, color="#00E676", alpha=0.4)
+ax1.set_title("Vertical Profile (X-Z)")
+ax1.set_xlabel("Reach (m)")
+ax1.set_ylabel("Height (m)")
+ax1.set_aspect('equal')
+ax1.grid(True, color="#333333", linestyle=":")
 
-cloud4 = pv.PolyData(Points4[:3].T)
-pl4 = pv.Plotter()
-pl4.add_points(cloud4, color='red', point_size=2, render_points_as_spheres=True)
-pl4.add_axes()
-pl4.show_grid()
-pl4.show(title="4-deep: full workspace")
+# --- Right: Top View (Geometric Wedge) ---
+R = np.sqrt(P_side[0]**2 + P_side[1]**2)
+R_min, R_max = np.min(R), np.max(R)
+t_min, t_max = np.rad2deg(shoulder_angle.min()), np.rad2deg(shoulder_angle.max())
 
-mask = Points4[:3][0] > 0
-Points4 = np.array([Points4[:3][0][mask],Points4[:3][1][mask],Points4[:3][2][mask]])
+wedge = Wedge((0, 0), R_max, t_min, t_max, width=R_max-R_min, 
+              facecolor="#00E5FF", edgecolor="#00B0FF", alpha=0.3)
+ax2.add_patch(wedge)
+limit = R_max * 1.2
+ax2.set_xlim(-limit, limit); ax2.set_ylim(-limit, limit)
+ax2.set_title("Top Sweep (X-Y)")
+ax2.set_xlabel("X (m)"); ax2.set_ylabel("Y (m)")
+ax2.set_aspect('equal')
+ax2.grid(True, color="#333333", linestyle=":")
 
-cloud4 = pv.PolyData(Points4.T)
-cloud4_decimated = cloud4.voxel_downsample(voxel_size=0.01)  
-hull = cloud4_decimated.delaunay_3d().extract_surface()
+plt.tight_layout()
 
-pl4 = pv.Plotter()
-pl4.add_mesh(hull, color='red', opacity=0.6, show_edges=True, 
-             edge_color='darkred', smooth_shading=True)
-pl4.add_axes()
-pl4.show_grid()
-pl4.show(title="4-deep: full workspace")
+# --- EXPORT FOR LATEX ---
+# plt.savefig("robot_workspace.pdf", format='pdf', bbox_inches='tight')
+# plt.savefig("robot_workspace.png", dpi=300, bbox_inches='tight')
+plt.show()

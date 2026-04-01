@@ -323,6 +323,6 @@ def ik_pose(
     usefull(best_angles)
     return best_angles, best_cost
 
-def euler_to_approach(rx, ry, rz):
+def euler_to_approach(rx : float , ry : float, rz : float):
     R = rotation_matrix(rz, 2) @ rotation_matrix(ry, 1) @ rotation_matrix(rx, 0)
     return R[:, 2]  # gripper Z axis
